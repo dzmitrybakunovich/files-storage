@@ -9,5 +9,6 @@ urlpatterns = [
         'registration/',
         views.UserRegistration.as_view(),
         name='registration'
-    )
+    ),
+    path('login/', views.UserLogin.as_view(), name='login'),
 ]
