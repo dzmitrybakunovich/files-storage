@@ -33,6 +33,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'password': 'Passwords do not match.'}
             )
+        user.create_path()
         user.set_password(password)
         user.save()
         return user
