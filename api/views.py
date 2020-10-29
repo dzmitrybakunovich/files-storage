@@ -8,9 +8,9 @@ from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 from .serializers import LoginSerializer, UserSerializer
 
 
-class UserRegistration(APIView):
-    serializer_class = UserSerializer
+class UserRegistrationView(APIView):
     permission_classes = (AllowAny,)
+    serializer_class = UserSerializer
 
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
@@ -28,7 +28,7 @@ class UserRegistration(APIView):
         return Response(serializer.errors, status=status_code)
 
 
-class UserLogin(APIView):
+class UserLoginView(APIView):
     permission_classes = (AllowAny,)
     serializer_class = LoginSerializer
 
@@ -46,7 +46,7 @@ class UserLogin(APIView):
         return Response(serializer.errors, status=status_code)
 
 
-class UserProfile(RetrieveUpdateAPIView):
+class UserProfileView(RetrieveUpdateAPIView):
     permission_classes = (IsAuthenticated,)
     authentication_class = JSONWebTokenAuthentication
     serializer_class = UserSerializer
