@@ -36,6 +36,7 @@ AUTH_USER_MODEL = 'api.CustomUser'
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
+
         'rest_framework.permissions.IsAuthenticated',
         'rest_framework.permissions.IsAdminUser',
     ],
@@ -45,7 +46,7 @@ REST_FRAMEWORK = {
 }
 
 # JWT TOKEN
-WT_AUTH = {
+JWT_AUTH = {
     'JWT_ENCODE_HANDLER':
         'rest_framework_jwt.utils.jwt_encode_handler',
     'JWT_DECODE_HANDLER':
