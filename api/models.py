@@ -18,16 +18,38 @@ class CustomUser(AbstractUser):
 
 
 class Folder(models.Model):
-    folder_path = models.CharField(max_length=400, null=False, default=None)
+    folder_path = models.CharField(max_length=415, null=False, unique=True)
     name = models.CharField(max_length=40, null=False, default=None)
     created = models.DateTimeField(auto_now_add=True)
-    lastupdated = models.DateTimeField(auto_now=True)
-    owner = models.OneToOneField('api.CustomUser', on_delete=models.CASCADE)
+    parent = models.ForeignKey(
+        'self',
+        blank=True,
+        null=True,
+        on_delete=models.CASCADE,
+        related_name='children',
+    )
+    owner = models.ForeignKey(
+        'api.CustomUser',
+        on_delete=models.CASCADE,
+        related_name='folders',
+    )
+
+    def create_folder(self):
+        self.folder_path = os.path.join(
+            self.owner.path,
+            self.name
+        ) if not self.parent else os.path.join(
+            self.parent.folder_path,
+            self.name
+        )
+        try:
+            os.mkdir(self.folder_path)
+        except OSError:
+            pass
+
+    def save(self, *args, **kwargs):
+        self.create_folder()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.folder_path
-
-
-class LastOpenedToUser(models.Model):
-    user = models.OneToOneField('api.CustomUser', on_delete=models.CASCADE)
-    lastopened = models.DateTimeField(auto_now=True)
