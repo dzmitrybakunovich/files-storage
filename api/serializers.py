@@ -3,7 +3,7 @@ from django.contrib.auth.models import update_last_login
 from rest_framework import serializers
 from rest_framework_jwt.settings import api_settings
 
-from .models import CustomUser
+from .models import CustomUser, Folder, File
 
 JWT_PAYLOAD_HANDLER = api_settings.JWT_PAYLOAD_HANDLER
 JWT_ENCODE_HANDLER = api_settings.JWT_ENCODE_HANDLER
@@ -80,7 +80,37 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {'password': 'Passwords do not match.'}
             )
-        user.create_path()
         user.set_password(password)
         user.save()
+
+        # Create user folder
+        Folder.objects.create(
+            parent=None,
+            name=user.username,
+            owner=user
+        )
         return user
+
+
+class FolderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Folder
+        fields = (
+            'id',
+            'name',
+        )
+        read_only_fields = (
+            'id',
+        )
+
+
+class FileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = File
+        fields = (
+            'id',
+            'name',
+        )
+        read_only_fields = (
+            'id',
+        )
