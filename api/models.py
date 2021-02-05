@@ -1,4 +1,5 @@
 import os
+from shutil import move, Error as MoveError
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
@@ -34,17 +35,33 @@ class Folder(models.Model):
     )
 
     def create_folder(self):
-        self.path = self.owner.path if not self.parent else os.path.join(
-            self.parent.path,
-            self.name
-        )
         try:
             os.mkdir(self.path)
         except OSError:
             pass
 
+    def move_folder(self):
+        try:
+            move(
+                self.path,
+                self.parent.path
+            )
+            self.path = os.path.join(
+                self.parent.path,
+                self.name
+            )
+        except MoveError:
+            pass
+
     def save(self, *args, **kwargs):
-        self.create_folder()
+        if not self.pk:
+            self.path = self.owner.path if not self.parent else os.path.join(
+                self.parent.path,
+                self.name
+            )
+            self.create_folder()
+        else:
+            self.move_folder()
         super().save(*args, **kwargs)
 
     def remove_folder(self):

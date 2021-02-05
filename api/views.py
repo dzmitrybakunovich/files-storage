@@ -1,5 +1,4 @@
 from django.db import IntegrityError
-
 from rest_framework import status
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -7,8 +6,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 
-from .serializers import LoginSerializer, UserSerializer, FolderSerializer, FileSerializer
 from .models import Folder
+from .serializers import LoginSerializer, UserSerializer, FolderSerializer, \
+    FileSerializer
 
 
 class UserRegistrationView(APIView):
@@ -27,8 +27,7 @@ class UserRegistrationView(APIView):
                 'username': serializer.data['username']
             }
             return Response(data, status=status_code)
-        status_code = status.HTTP_400_BAD_REQUEST
-        return Response(serializer.errors, status=status_code)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserLoginView(APIView):
@@ -45,8 +44,7 @@ class UserLoginView(APIView):
                 'token': serializer.data['token'],
             }
             return Response(data, status=status_code)
-        status_code = status.HTTP_400_BAD_REQUEST
-        return Response(serializer.errors, status=status_code)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserProfileView(RetrieveUpdateAPIView):
@@ -61,29 +59,30 @@ class UserProfileView(RetrieveUpdateAPIView):
     def put(self, request, *args, **kwargs):
         serializer_data = request.data.get('user', {})
         serializer = self.serializer_class(
-            request.user, data=serializer_data, partial=True
+            request.user,
+            data=serializer_data,
+            partial=True
         )
         if serializer.is_valid(raise_exception=True):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-        status_code = status.HTTP_400_BAD_REQUEST
-        return Response(serializer.errors, status=status_code)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FolderView(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_class = JSONWebTokenAuthentication
 
-    def post(self, request, folder_id):
+    def post(self, request):
         try:
             folder = Folder.objects.create(
                 name=request.data.get('folder_name'),
-                parent_id=folder_id,
+                parent_id=request.data.get('folder'),
                 owner=request.user
             )
             return Response(
                 {
-                    'folder_id': folder.id,
+                    'folder': folder.id,
                     'folder_name': folder.name,
                     'folder_owner': folder.owner.id,
                 }
@@ -95,10 +94,10 @@ class FolderView(APIView):
                 }
             )
 
-    def get(self, request, folder_id):
+    def get(self, request):
         try:
             folder = Folder.objects.get(
-                pk=folder_id
+                pk=request.data.get('folder')
             )
             folder_serializer = FolderSerializer(
                 folder.children.all(),
@@ -122,10 +121,10 @@ class FolderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    def delete(self, request, folder_id):
+    def delete(self, request):
         try:
             folder = Folder.objects.get(
-                pk=folder_id
+                pk=request.data.get('folder')
             )
             folder.delete()
             return Response(
@@ -136,3 +135,20 @@ class FolderView(APIView):
             )
         except Folder.DoesNotExist:
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+class FolderMoveView(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_class = JSONWebTokenAuthentication
+
+    def post(self, request):
+        folder = Folder.objects.get(
+            pk=request.data.get('from_folder')
+        )
+        folder.parent_id = request.data.get('to_folder')
+        folder.save()
+        return Response(
+            {
+                'ok': folder.path,
+            }
+        )
