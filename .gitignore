@@ -14,3 +14,6 @@ venv
 ### Images ###
 *.jpg
 *.png
+
+## Project folder ##
+storage/
