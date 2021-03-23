@@ -214,7 +214,15 @@ class FileView(APIView):
         )
 
 
-class FileMoveView(APIView):
+class FileCopyView(APIView):
 
     def post(self, request):
-        pass
+        file = File.objects.get(
+            pk=request.data.get('file')
+        )
+        file.duplicate(request.data.get('to_folder'))
+        return Response(
+            {
+                'ok': 'qq',
+            }
+        )
