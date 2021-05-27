@@ -112,3 +112,18 @@ class File(models.Model):
             file=DjangoFile(self.file, self.name)
         )
         new_file.save()
+
+
+class FolderShare(models.Model):
+    folder = models.ForeignKey(
+        'api.Folder',
+        null=False,
+        on_delete=models.CASCADE,
+        related_name='folders'
+    )
+    user = models.ForeignKey(
+        'api.CustomUser',
+        null=False,
+        on_delete=models.CASCADE,
+        related_name='files'
+    )

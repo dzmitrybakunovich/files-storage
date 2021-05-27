@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 
-from .models import Folder, File
+from .models import Folder, File, FolderShare
 from .serializers import LoginSerializer, UserSerializer, FolderSerializer, \
     FileSerializer
 
@@ -33,7 +33,10 @@ class UserRegistrationView(APIView):
                 'username': serializer.data['username']
             }
             return Response(data, status=status_code)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class UserLoginView(APIView):
@@ -50,7 +53,10 @@ class UserLoginView(APIView):
                 'token': serializer.data['token'],
             }
             return Response(data, status=status_code)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class UserProfileView(RetrieveUpdateAPIView):
@@ -72,7 +78,10 @@ class UserProfileView(RetrieveUpdateAPIView):
         if serializer.is_valid(raise_exception=True):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class FolderView(APIView):
@@ -91,13 +100,15 @@ class FolderView(APIView):
                     'folder': folder.id,
                     'folder_name': folder.name,
                     'folder_owner': folder.owner.id,
-                }
+                },
+                status=status.HTTP_201_CREATED
             )
         except IntegrityError:
             return Response(
                 {
                     'status': 'A folder with that name already exists',
-                }
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
 
     def get(self, request):
@@ -117,7 +128,8 @@ class FolderView(APIView):
                 {
                     'folders': folder_serializer.data,
                     'files': file_serializer.data,
-                }
+                },
+                status=status.HTTP_201_CREATED
             )
         except Folder.DoesNotExist:
             return Response(
@@ -155,8 +167,9 @@ class FolderMoveView(APIView):
         folder.save()
         return Response(
             {
-                'ok': folder.path,
-            }
+                'folder_move_to': folder.path,
+            },
+            status=status.HTTP_201_CREATED
         )
 
 
@@ -175,7 +188,8 @@ class FileView(APIView):
                 'Folder': file.folder
             }
             return Response(
-                headers=response_header
+                headers=response_header,
+                status=status.HTTP_200_OK
             )
         except File.DoesNotExist:
             return Response(
@@ -215,14 +229,54 @@ class FileView(APIView):
 
 
 class FileCopyView(APIView):
-
     def post(self, request):
-        file = File.objects.get(
-            pk=request.data.get('file')
-        )
-        file.duplicate(request.data.get('to_folder'))
+        try:
+            file = File.objects.get(
+                pk=request.data.get('file')
+            )
+            file.duplicate(request.data.get('to_folder'))
+            return Response(
+                {
+                    'file_duplicate_to': request.data.get('to_folder'),
+                },
+                status=status.HTTP_201_CREATED
+            )
+        except File.DoesNotExist:
+            return Response(
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class ShareView(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_class = JSONWebTokenAuthentication
+
+    def get(self, request, pk):
+        access = False
+        try:
+            FolderShare.objects.filter(folder_id=pk, user_id=request.user.id)
+            access = True
+        except FolderShare.DoesNotExist:
+            pass
+
         return Response(
             {
-                'ok': 'qq',
+                'access':  access,
             }
         )
+
+    def post(self, request, pk):
+        if request.user.id == Folder.objects.get(id=pk).owner_id:
+            FolderShare.objects.create(
+                folder_id=pk,
+                user_id=request.data.get('user_id'),
+            )
+            return Response(
+                {"ok": True}
+            )
+        else:
+            return Response(
+                {"ok": False}
+            )
+
+
