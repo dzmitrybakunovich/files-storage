@@ -3,7 +3,8 @@ from django.contrib.auth.models import update_last_login
 from rest_framework import serializers
 from rest_framework_jwt.settings import api_settings
 
-from .models import CustomUser, Folder, File
+from .models import CustomUser, Folder, File, FolderShare, FolderHistory, \
+    FileHistory
 
 JWT_PAYLOAD_HANDLER = api_settings.JWT_PAYLOAD_HANDLER
 JWT_ENCODE_HANDLER = api_settings.JWT_ENCODE_HANDLER
@@ -109,10 +110,46 @@ class FileSerializer(serializers.ModelSerializer):
         model = File
         fields = (
             'id',
+            'folder',
             'name',
-            'created',
-            'owner'
+            'owner',
+            'file'
         )
         read_only_fields = (
             'id',
+        )
+
+
+class FolderShareSerializer(serializers.HyperlinkedModelSerializer):
+    username = serializers.CharField(read_only=True, source="user.username")
+
+    class Meta:
+        model = FolderShare
+        fields = (
+            'id',
+            'username'
+        )
+
+
+class FolderHistorySerializer(serializers.HyperlinkedModelSerializer):
+    username = serializers.CharField(read_only=True, source="user.username")
+
+    class Meta:
+        model = FolderHistory
+        fields = (
+            'id',
+            'username',
+            'opened'
+        )
+
+
+class FileHistorySerializer(serializers.HyperlinkedModelSerializer):
+    username = serializers.CharField(read_only=True, source="user.username")
+
+    class Meta:
+        model = FileHistory
+        fields = (
+            'id',
+            'username',
+            'opened'
         )

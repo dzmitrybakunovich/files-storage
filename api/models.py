@@ -113,6 +113,11 @@ class File(models.Model):
         )
         new_file.save()
 
+    def delete(self, using=None, keep_parents=False):
+        if os.path.isfile(self.file.path):
+            os.remove(self.file.path)
+        super().delete()
+
 
 class FolderShare(models.Model):
     folder = models.ForeignKey(
@@ -125,5 +130,33 @@ class FolderShare(models.Model):
         'api.CustomUser',
         null=False,
         on_delete=models.CASCADE,
-        related_name='files'
+        related_name='users'
     )
+
+
+class FolderHistory(models.Model):
+    folder = models.ForeignKey(
+        'api.Folder',
+        null=False,
+        on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        'api.CustomUser',
+        null=False,
+        on_delete=models.CASCADE
+    )
+    opened = models.DateTimeField(auto_now_add=True)
+
+
+class FileHistory(models.Model):
+    file = models.ForeignKey(
+        'api.File',
+        null=False,
+        on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        'api.CustomUser',
+        null=False,
+        on_delete=models.CASCADE
+    )
+    opened = models.DateTimeField(auto_now_add=True)

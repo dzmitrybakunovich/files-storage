@@ -12,9 +12,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 
-from .models import Folder, File, FolderShare
+from .models import Folder, File, FolderShare, CustomUser, FolderHistory, \
+    FileHistory
 from .serializers import LoginSerializer, UserSerializer, FolderSerializer, \
-    FileSerializer
+    FileSerializer, FolderShareSerializer, FolderHistorySerializer, \
+    FileHistorySerializer
 
 
 class UserRegistrationView(APIView):
@@ -66,7 +68,12 @@ class UserProfileView(RetrieveUpdateAPIView):
 
     def get(self, request, *args, **kwargs):
         serializer = self.serializer_class(request.user)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        user_folder = Folder.objects.get(owner=request.user, parent=None)
+        return Response(
+            {
+                "user_data": serializer.data,
+                "user_folder": user_folder.id
+            }, status=status.HTTP_200_OK)
 
     def put(self, request, *args, **kwargs):
         serializer_data = request.data.get('user', {})
@@ -84,15 +91,38 @@ class UserProfileView(RetrieveUpdateAPIView):
         )
 
 
+class FolderPropertyView(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_class = JSONWebTokenAuthentication
+
+    def get(self, request, pk):
+        try:
+            folder = Folder.objects.get(
+                pk=pk
+            )
+            data = {
+                'number_of_files': folder.files.count(),
+                'number_of_folders': folder.children.count(),
+            }
+            return Response(
+                data,
+                status=status.HTTP_200_OK
+            )
+        except File.DoesNotExist:
+            return Response(
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
 class FolderView(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_class = JSONWebTokenAuthentication
 
-    def post(self, request):
+    def post(self, request, pk):
         try:
             folder = Folder.objects.create(
                 name=request.data.get('folder_name'),
-                parent_id=request.data.get('folder'),
+                parent_id=pk,
                 owner=request.user
             )
             return Response(
@@ -111,26 +141,39 @@ class FolderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    def get(self, request):
+    def get(self, request, pk):
         try:
             folder = Folder.objects.get(
-                pk=request.data.get('folder')
+                pk=pk
             )
-            folder_serializer = FolderSerializer(
-                folder.children.all(),
-                many=True
+            is_folder_share = FolderShare.objects.filter(
+                folder_id=pk,
+                user_id=request.user.id
             )
-            file_serializer = FileSerializer(
-                folder.files.all(),
-                many=True
-            )
-            return Response(
-                {
-                    'folders': folder_serializer.data,
-                    'files': file_serializer.data,
-                },
-                status=status.HTTP_201_CREATED
-            )
+            if folder.owner == request.user or is_folder_share:
+                FolderHistory.objects.create(
+                    folder=folder,
+                    user=request.user
+                )
+                folder_serializer = FolderSerializer(
+                    folder.children.all(),
+                    many=True
+                )
+                file_serializer = FileSerializer(
+                    folder.files.all(),
+                    many=True
+                )
+                return Response(
+                    {
+                        'folders': folder_serializer.data,
+                        'files': file_serializer.data,
+                    },
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                return Response(
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         except Folder.DoesNotExist:
             return Response(
                 {
@@ -139,10 +182,10 @@ class FolderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    def delete(self, request):
+    def delete(self, request, pk):
         try:
             folder = Folder.objects.get(
-                pk=request.data.get('folder')
+                pk=pk
             )
             folder.delete()
             return Response(
@@ -173,22 +216,22 @@ class FolderMoveView(APIView):
         )
 
 
-class FileView(APIView):
+class FilePropertyView(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_class = JSONWebTokenAuthentication
 
-    def head(self, request):
+    def get(self, request, pk):
         try:
             file = File.objects.get(
-                pk=request.data.get('file')
+                pk=pk
             )
-            response_header = {
-                'Size': os.stat(str(file.file)).st_size,
-                'Owner': file.owner,
-                'Folder': file.folder
+            serializer = UserSerializer(file.owner)
+            data = {
+                'size': os.stat(str(file.file)).st_size,
+                'owner': serializer.data,
             }
             return Response(
-                headers=response_header,
+                data,
                 status=status.HTTP_200_OK
             )
         except File.DoesNotExist:
@@ -196,9 +239,18 @@ class FileView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    def get(self, request):
+
+class FileView(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_class = JSONWebTokenAuthentication
+
+    def get(self, request, pk):
         queryset = File.objects.get(
-            id=request.data.get('id')
+            id=pk
+        )
+        FileHistory.objects.create(
+            file=queryset,
+            user=request.user
         )
         file_handle = queryset.file
         document = open(
@@ -213,9 +265,32 @@ class FileView(APIView):
                                           f'filename="{queryset.name}"'
         return response
 
+    def delete(self, request, pk):
+        try:
+            file = File.objects.get(
+                pk=pk
+            )
+            file.delete()
+            return Response(
+                {
+                    'response': f'File {file.name} remove'
+                },
+                status=status.HTTP_200_OK
+            )
+        except Folder.DoesNotExist:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+class AddFileView(APIView):
+    permission_classes = (IsAuthenticated,)
+    authentication_class = JSONWebTokenAuthentication
+
     @parser_classes([MultiPartParser])
     def put(self, request):
-        file_serializer = FileSerializer(data=request.data)
+        request.data['owner'] = request.user.id
+        file_serializer = FileSerializer(
+            data=request.data,
+        )
         if file_serializer.is_valid():
             file_serializer.save()
             return Response(
@@ -247,36 +322,49 @@ class FileCopyView(APIView):
             )
 
 
-class ShareView(APIView):
+class ShareFolderView(APIView):
     permission_classes = (IsAuthenticated,)
     authentication_class = JSONWebTokenAuthentication
 
     def get(self, request, pk):
-        access = False
-        try:
-            FolderShare.objects.filter(folder_id=pk, user_id=request.user.id)
-            access = True
-        except FolderShare.DoesNotExist:
-            pass
-
-        return Response(
-            {
-                'access':  access,
-            }
-        )
-
-    def post(self, request, pk):
-        if request.user.id == Folder.objects.get(id=pk).owner_id:
-            FolderShare.objects.create(
-                folder_id=pk,
-                user_id=request.data.get('user_id'),
+        if request.user == Folder.objects.get(id=pk).owner:
+            folder_members = FolderShareSerializer(
+                FolderShare.objects.filter(folder_id=pk), many=True
             )
             return Response(
-                {"ok": True}
+                {
+                    "members": folder_members.data
+                }
+            )
+
+    def post(self, request, pk):
+        if request.user == Folder.objects.get(id=pk).owner:
+            user = CustomUser.objects.get(username=request.data.get('username'))
+            FolderShare.objects.create(
+                folder_id=pk,
+                user=user,
+            )
+            return Response(
+                {
+                    "response": True
+                }
             )
         else:
             return Response(
-                {"ok": False}
+                {
+                    "response": False
+                }
             )
 
 
+class FolderHistoryView(APIView):
+
+    def get(self, request, pk):
+        folder_history = FolderHistorySerializer(
+            FolderHistory.objects.filter(folder_id=pk), many=True
+        )
+        return Response(
+            {
+                "folder_history": folder_history.data
+            }
+        )
